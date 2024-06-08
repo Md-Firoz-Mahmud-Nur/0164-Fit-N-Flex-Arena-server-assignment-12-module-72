@@ -37,7 +37,11 @@ async function run() {
     const fitNFlexArenaDatabase = client.db("fitNFlexArena");
     const usersCollection = fitNFlexArenaDatabase.collection("users");
 
-
+    app.get("/users", async (req, res) => {
+      const cursor = usersCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     app.post("/users", async (req, res) => {
       const newUser = req.body;
