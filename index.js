@@ -49,7 +49,7 @@ async function run() {
 
     // Middleware
     const verifyToken = (req, res, next) => {
-      console.log('inside verify token', req.headers.authorization);
+      console.log("inside verify token", req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "unauthorized access" });
       }
@@ -88,6 +88,24 @@ async function run() {
         return res.send({ message: "user already exists", insertedId: null });
       }
       const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.put("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const updatedData = req.body;
+
+      const query = { email: email };
+      const update = {
+        $set: updatedData,
+      };
+
+      const result = await usersCollection.updateOne(query, update);
+
+      if (result.matchedCount === 0) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
       res.send(result);
     });
 
