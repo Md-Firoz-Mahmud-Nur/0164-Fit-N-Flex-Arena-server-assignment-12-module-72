@@ -74,7 +74,7 @@ async function run() {
       next();
     };
 
-    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/users", async (req, res) => {
       const cursor = usersCollection.find();
       const result = await cursor.toArray();
       res.send(result);
@@ -91,22 +91,32 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      res.send(user);
+    });
+
     app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
-      const updatedData = req.body;
-
+      console.log(email);
+      const userData = req.body;
+      console.log(userData);
       const query = { email: email };
       const update = {
-        $set: updatedData,
+        $set: userData,
       };
+      const options = { upsert: true };
 
-      const result = await usersCollection.updateOne(query, update);
-
-      if (result.matchedCount === 0) {
-        return res.status(404).send({ message: "User not found" });
+      const result = await usersCollection.updateOne(query, update, options);
+      if (result.upsertedCount > 0) {
+        res.send({ message: "User created successfully", result });
+      } else if (result.modifiedCount > 0) {
+        res.send({ message: "User updated successfully", result });
+      } else {
+        res.send({ message: "No changes made to the user", result });
       }
-
-      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
