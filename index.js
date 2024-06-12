@@ -4,9 +4,9 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const port = process.env.PORT || 3000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
-//Middleware
+// Middleware
 app.use(
   cors({
     origin: [
@@ -32,13 +32,13 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
+    // Connect the client to the server (optional starting in v4.7)
     await client.connect();
 
     const fitNFlexArenaDatabase = client.db("fitNFlexArena");
     const usersCollection = fitNFlexArenaDatabase.collection("users");
 
-    //jwt
+    // JWT
     app.post("/jwt", async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
@@ -129,6 +129,30 @@ async function run() {
         res.send({ message: "User updated successfully", result });
       } else {
         res.send({ message: "No changes made to the user", result });
+      }
+    });
+
+    app.put("/users/:id/status", async (req, res) => {
+      const userId = req.params.id;
+      const { status, role } = req.body;
+      try {
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { status: status, role: role } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res
+            .status(200)
+            .send({ message: "User status and role updated successfully" });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or no changes made" });
+        }
+      } catch (error) {
+        console.error("Error updating user status and role:", error);
+        res.status(500).send({ message: "An error occurred", error });
       }
     });
 
