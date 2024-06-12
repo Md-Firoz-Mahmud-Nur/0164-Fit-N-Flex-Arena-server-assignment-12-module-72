@@ -98,6 +98,19 @@ async function run() {
       res.send(user);
     });
 
+    app.get("/usersPending", async (req, res) => {
+      console.log("pending hit");
+      try {
+        const query = { status: "pending" };
+        const pendingUsers = await usersCollection.find(query).toArray();
+        console.log("Pending users found:", pendingUsers);
+        res.json(pendingUsers);
+      } catch (error) {
+        console.error("Error fetching pending users:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
     app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
       console.log(email);
