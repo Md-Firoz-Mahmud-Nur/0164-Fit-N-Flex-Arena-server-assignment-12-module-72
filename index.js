@@ -192,6 +192,29 @@ async function run() {
         res.status(500).send({ message: "An error occurred", error });
       }
     });
+    app.put("/users/:id/roleMember", async (req, res) => {
+      const userId = req.params.id;
+      const { role } = req.body;
+      try {
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { role: role,  } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res
+            .status(200)
+            .send({ message: "User status and role updated successfully" });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or no changes made" });
+        }
+      } catch (error) {
+        console.error("Error updating user status and role:", error);
+        res.status(500).send({ message: "An error occurred", error });
+      }
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
