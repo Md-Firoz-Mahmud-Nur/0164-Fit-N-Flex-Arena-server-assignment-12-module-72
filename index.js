@@ -111,6 +111,20 @@ async function run() {
       }
     });
 
+
+    app.get("/usersTrainer", async (req, res) => {
+      console.log("Trainer Hit");
+      try {
+        const query = { role: "trainer" };
+        const trainers = await usersCollection.find(query).toArray();
+        console.log("Trainer found:", trainers);
+        res.json(trainers);
+      } catch (error) {
+        console.error("Error fetching trainers:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
     app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
       console.log(email);
