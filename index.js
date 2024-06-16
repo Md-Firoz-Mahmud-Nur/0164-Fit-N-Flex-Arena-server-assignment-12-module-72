@@ -97,6 +97,15 @@ async function run() {
       res.send({ admin });
     });
 
+    app.get("/allClassName", async (req, res) => {
+      const query = {};
+      const options = {
+        projection: { _id: 0, name: 1 },
+      };
+      const result = await classesCollection.find(query, options).toArray();
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user.email };
