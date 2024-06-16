@@ -37,6 +37,7 @@ async function run() {
 
     const fitNFlexArenaDatabase = client.db("fitNFlexArena");
     const usersCollection = fitNFlexArenaDatabase.collection("users");
+    const classesCollection = fitNFlexArenaDatabase.collection("classes");
 
     // JWT
     app.post("/jwt", async (req, res) => {
@@ -80,6 +81,22 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user.email };
@@ -88,6 +105,16 @@ async function run() {
         return res.send({ message: "user already exists", insertedId: null });
       }
       const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.post("/addNewClass", verifyToken, verifyAdmin, async (req, res) => {
+      if (req?.decoded?.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const newClass = req.body;
+
+      const result = await classesCollection.insertOne(newClass);
       res.send(result);
     });
 
@@ -110,7 +137,6 @@ async function run() {
         res.status(500).send("Internal Server Error");
       }
     });
-
 
     app.get("/usersTrainer", async (req, res) => {
       console.log("Trainer Hit");
@@ -198,7 +224,7 @@ async function run() {
       try {
         const result = await usersCollection.updateOne(
           { _id: new ObjectId(userId) },
-          { $set: { role: role,  } }
+          { $set: { role: role } }
         );
 
         if (result.modifiedCount > 0) {
