@@ -97,6 +97,63 @@ async function run() {
       res.send({ admin });
     });
 
+    app.get("/classes", async (req, res) => {
+      try {
+        const { page = 0, search = "" } = req.query;
+        const limit = 10; // Number of classes per page
+        const skip = page * limit;
+
+        const query = search
+          ? { title: { $regex: search, $options: "i" } }
+          : {};
+
+        const result = await classesCollection
+          .aggregate([
+            { $match: query },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "users",
+                let: { className: "$name" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          {
+                            $in: ["$$className", { $ifNull: ["$skills", []] }],
+                          },
+                          { $eq: ["$status", "resolved"] },
+                          { $eq: ["$role", "trainer"] },
+                        ],
+                      },
+                    },
+                  },
+                  { $project: { photoUrl: 1, _id: 1, role: 1, status: 1 } },
+                ],
+                as: "trainer",
+              },
+            },
+            {
+              $project: {
+                name: 1,
+                description: 1,
+                image: 1,
+                trainer: 1,
+              },
+            },
+          ])
+          .toArray();
+
+        const matchedTrainers = await classesCollection.countDocuments(query);
+
+        res.json({ result, matchedTrainers });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     app.get("/allClassName", async (req, res) => {
       const query = {};
       const options = {
@@ -158,6 +215,13 @@ async function run() {
         console.error("Error fetching trainers:", error);
         res.status(500).send("Internal Server Error");
       }
+    });
+
+    app.get("/appliedTrainerDetail/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await usersCollection.findOne(query);
+      res.send(result);
     });
 
     app.put("/users/:email", async (req, res) => {
