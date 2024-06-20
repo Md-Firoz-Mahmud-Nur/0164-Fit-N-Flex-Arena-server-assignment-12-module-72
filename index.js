@@ -100,12 +100,10 @@ async function run() {
     app.get("/classes", async (req, res) => {
       try {
         const { page = 0, search = "" } = req.query;
-        const limit = 10; // Number of classes per page
+        const limit = 6;
         const skip = page * limit;
 
-        const query = search
-          ? { title: { $regex: search, $options: "i" } }
-          : {};
+        const query = search ? { name: { $regex: search, $options: "i" } } : {};
 
         const result = await classesCollection
           .aggregate([
