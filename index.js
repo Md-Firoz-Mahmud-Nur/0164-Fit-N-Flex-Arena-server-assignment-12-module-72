@@ -13,6 +13,9 @@ app.use(
       "http://localhost:5173",
       "http://localhost:5174",
       "http://localhost:5175",
+      "https://simple-firebase-module-49-a.web.app",
+      "https://simple-firebase-module-49-a.firebaseapp.com",
+      "https://0164-fit-n-flex-arena-server-assignment-12-module-72.vercel.app",
     ],
     credentials: true,
   })
@@ -35,7 +38,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server (optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const fitNFlexArenaDatabase = client.db("fitNFlexArena");
     const usersCollection = fitNFlexArenaDatabase.collection("users");
@@ -747,10 +750,10 @@ async function run() {
     );
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
