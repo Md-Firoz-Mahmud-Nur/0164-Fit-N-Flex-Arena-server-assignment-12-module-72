@@ -19,6 +19,8 @@ app.use(
 );
 app.use(express.json());
 
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_SECRET_KEY}@cluster0.fp5eepf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -38,6 +40,14 @@ async function run() {
     const fitNFlexArenaDatabase = client.db("fitNFlexArena");
     const usersCollection = fitNFlexArenaDatabase.collection("users");
     const classesCollection = fitNFlexArenaDatabase.collection("classes");
+    const slotsCollection = fitNFlexArenaDatabase.collection("slots");
+    const paymentsCollection = fitNFlexArenaDatabase.collection("payments");
+    const subsCollection = fitNFlexArenaDatabase.collection("subs");
+    const testimonialsCollection =
+      fitNFlexArenaDatabase.collection("testimonials");
+    const blogsCollection = fitNFlexArenaDatabase.collection("blogs");
+    const upVotesCollection = fitNFlexArenaDatabase.collection("upVotes");
+    const downVotesCollection = fitNFlexArenaDatabase.collection("downVotes");
 
     // JWT
     app.post("/jwt", async (req, res) => {
@@ -50,7 +60,6 @@ async function run() {
 
     // Middleware
     const verifyToken = (req, res, next) => {
-      console.log("inside verify token", req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "unauthorized access" });
       }
@@ -75,11 +84,39 @@ async function run() {
       next();
     };
 
+    const verifyTrainer = async (req, res, next) => {
+      const user = req.decoded;
+      const query = { email: user?.email };
+      const result = await usersCollection.findOne(query);
+      if (!result || result?.role !== "trainer") {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+      next();
+    };
+
     app.get("/users", async (req, res) => {
       const cursor = usersCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    app.get(
+      "/manageMySlots/:email",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        const email = req?.query?.email;
+
+        if (email !== req.decoded.email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
+
+        const trainerEmail = req.params.email;
+        const query = { "trainer.email": trainerEmail };
+        const result = await slotsCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
 
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
@@ -97,12 +134,53 @@ async function run() {
       res.send({ admin });
     });
 
+    app.get("/users/trainer/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let trainer = false;
+      if (user) {
+        trainer = user?.role === "trainer" && user?.status === "resolved";
+        // trainer = user?.role === "trainer";
+      }
+      res.send({ trainer });
+    });
+    app.get("/users/member/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let member = false;
+      if (user) {
+        member = user?.role === "member";
+      }
+      res.send({ member });
+    });
+
+    app.get("/allTrainers", async (req, res) => {
+      try {
+        const result = await usersCollection
+          .find({ status: "resolved", role: "trainer" })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          message: "An error occurred while fetching trainers.",
+          error,
+        });
+      }
+    });
+
     app.get("/classes", async (req, res) => {
       try {
         const { page = 0, search = "" } = req.query;
         const limit = 6;
         const skip = page * limit;
-
         const query = search ? { name: { $regex: search, $options: "i" } } : {};
 
         const result = await classesCollection
@@ -152,12 +230,53 @@ async function run() {
       }
     });
 
+    app.get("/trainerDetails/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await usersCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.get("/trainerSlots/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { "trainer.id": id, status: "available" };
+      const result = await slotsCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.get(
+      "/slotUser/:email",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        if (req?.decoded?.email !== req.query.email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
+        const email = req.params.email;
+        const query = { email: email };
+        const result = await usersCollection.findOne(query);
+        res.send(result);
+      }
+    );
+
     app.get("/allClassName", async (req, res) => {
       const query = {};
       const options = {
         projection: { _id: 0, name: 1 },
       };
       const result = await classesCollection.find(query, options).toArray();
+      res.send(result);
+    });
+
+    app.get("/myBooked/:email", verifyToken, async (req, res) => {
+      if (req?.query?.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const email = req.params.email;
+      const query = {
+        "user.email": email,
+      };
+      const result = await paymentsCollection.find(query).toArray();
       res.send(result);
     });
 
@@ -172,6 +291,15 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/addNewSlot", verifyToken, verifyTrainer, async (req, res) => {
+      if (req?.decoded?.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const newSlots = req.body;
+      const result = await slotsCollection.insertMany(newSlots);
+      res.send(result);
+    });
+
     app.post("/addNewClass", verifyToken, verifyAdmin, async (req, res) => {
       if (req?.decoded?.email !== req.query.email) {
         return res.status(403).send({ message: "Forbidden Access" });
@@ -182,11 +310,88 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/payment", verifyToken, async (req, res) => {
+      const email = req?.query?.email;
+
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+
+      const paymentData = req.body;
+
+      if (!paymentData?.class?.cName) {
+        return res.status(400).send({ message: "Class name is required" });
+      }
+
+      const className = paymentData.class.cName;
+      const name = String(paymentData.class.cName); // Ensure name is a string
+
+      const query = { name: { $regex: name, $options: "i" } };
+      const query0 = { _id: new ObjectId(paymentData.class.sId) };
+
+      const updateSlot = {
+        $set: {
+          status: "booked",
+          bookedBy: {
+            name: paymentData.user.name,
+            email: paymentData.user.email,
+            class_name: className,
+          },
+        },
+      };
+
+      try {
+        await classesCollection.updateOne(query, { $inc: { totalBooking: 1 } });
+        await slotsCollection.updateOne(query0, updateSlot);
+        const result = await paymentsCollection.insertOne(paymentData);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    app.post("/makePayment", verifyToken, async (req, res) => {
+      const email = req?.query?.email;
+
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+
+      const { price } = req.body;
+
+      const priceInCent = parseFloat(price) * 100;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: priceInCent,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       res.send(user);
+    });
+
+    app.get("/activityLogs/:email", verifyToken, async (req, res) => {
+      if (req?.query?.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const email = req.params.email;
+      const query = {
+        email: email,
+      };
+      const result = await usersCollection.find(query).toArray();
+      res.send(result);
     });
 
     app.get("/usersPending", async (req, res) => {
@@ -200,6 +405,79 @@ async function run() {
         console.error("Error fetching pending users:", error);
         res.status(500).send("Internal Server Error");
       }
+    });
+
+    app.get("/newsletter", verifyToken, verifyAdmin, async (req, res) => {
+      if (req?.decoded?.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const result = await subsCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.post("/subs", async (req, res) => {
+      const subscribeUser = req.body;
+      const query = { email: subscribeUser.email };
+      const isExists = await subsCollection.findOne(query);
+      if (isExists) return res.send({ message: "Already subscribes" });
+      const result = await subsCollection.insertOne(subscribeUser);
+      res.send(result);
+    });
+
+    app.get("/balance", verifyToken, verifyAdmin, async (req, res) => {
+      if (req?.query?.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const info = await paymentsCollection
+        .aggregate([
+          {
+            $sort: {
+              date: -1, // Sort by date field in descending order
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalBalance: { $sum: "$price" },
+              transactions: {
+                $push: {
+                  transactionId: "$transactionId",
+                  price: "$price",
+                  email: "$user.email",
+                },
+              },
+              uniqueEmails: { $addToSet: "$user.email" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              totalBalance: 1,
+              transactions: 1,
+              paidMembers: { $size: "$uniqueEmails" },
+            },
+          },
+        ])
+        .toArray();
+
+      const subscribesCount = await subsCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              count: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      const chartData = [
+        ["users", "count"],
+        ["Paid Members", info[0].paidMembers],
+        ["Newsletter Subscribers", subscribesCount[0].count],
+      ];
+
+      res.send({ info, subscribesCount, chartData });
     });
 
     app.get("/usersTrainer", async (req, res) => {
@@ -222,6 +500,16 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/blogs", async (req, res) => {
+      const result = await blogsCollection
+        .find()
+        .project({ title: 1, author: 1, postDate: 1, image: 1, description: 1 })
+        .sort({ postDate: -1 })
+        .limit(6)
+        .toArray();
+      res.send(result);
+    });
+
     app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
       console.log(email);
@@ -241,6 +529,20 @@ async function run() {
       } else {
         res.send({ message: "No changes made to the user", result });
       }
+    });
+
+    app.get("/featuredClass", async (req, res) => {
+      const result = await classesCollection
+        .aggregate([{ $sort: { totalBooking: -1 } }])
+        .limit(6)
+        .toArray();
+
+      res.send(result);
+    });
+
+    app.get("/testimonials", async (req, res) => {
+      const result = await testimonialsCollection.find().toArray();
+      res.send(result);
     });
 
     app.put("/users/:id/statusResolved", async (req, res) => {
@@ -266,6 +568,113 @@ async function run() {
         res.status(500).send({ message: "An error occurred", error });
       }
     });
+
+    app.patch("/voteBlog", verifyToken, async (req, res) => {
+      if (req?.decoded?.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+
+      const id = req.body.id;
+      const vote = req.body.vote;
+      const email = req.body.email;
+
+      const query = {
+        $and: [{ email: email }, { blogId: id }],
+      };
+
+      const voteData = {
+        blogId: id,
+        email: email,
+        vote: vote,
+      };
+
+      if (vote === "like") {
+        const isInUpVote = await upVotesCollection.findOne(query);
+        const isInDownVote = await downVotesCollection.findOne(query);
+        if (isInUpVote === null) {
+          await upVotesCollection.insertOne(voteData);
+          const result1 = await blogsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $inc: { likes: 1 } }
+          );
+        }
+
+        if (isInDownVote !== null) {
+          await downVotesCollection.deleteOne(query);
+          const result2 = await blogsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $inc: { dislikes: -1 } }
+          );
+        }
+
+        res.send({ success: true });
+      } else {
+        const isInUpVote = await upVotesCollection.findOne(query);
+        const isInDownVote = await downVotesCollection.findOne(query);
+        if (isInUpVote !== null) {
+          await upVotesCollection.deleteOne(query);
+          const result1 = await blogsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $inc: { likes: -1 } }
+          );
+        }
+
+        if (isInDownVote === null) {
+          await downVotesCollection.insertOne(voteData);
+          const result2 = await blogsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $inc: { dislikes: 1 } }
+          );
+        }
+
+        res.send({ success: true });
+      }
+    });
+
+    app.get("/teams", async (req, res) => {
+      const result = await usersCollection
+        .find({ status: "resolved", role: "trainer" })
+        .project({
+          name: 1,
+          photoUrl: 1,
+          biography: 1,
+          skills: 1,
+          experience: 1,
+        })
+        .limit(3)
+        .toArray();
+      res.send(result);
+    });
+
+    app.get("/user/role/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await usersCollection.findOne(query);
+      res.send(result.role);
+    });
+
+    app.post("/addBlog", verifyToken, async (req, res) => {
+      if (req?.decoded?.email !== req.query.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      const newBlog = req.body;
+
+      const result = await blogsCollection.insertOne(newBlog);
+      res.send(result);
+    });
+
+    app.get("/forum", async (req, res) => {
+      const page = parseInt(req.query.page);
+      const totalBlogs = await blogsCollection.countDocuments();
+      const blogs = await blogsCollection
+        .find()
+        .sort({ postDate: -1 })
+        .skip(page * 6)
+        .limit(6)
+        .toArray();
+      res.send({ blogs, totalBlogs });
+    });
+
     app.put("/users/:id/statusReject", async (req, res) => {
       const userId = req.params.id;
       const { status, feedback } = req.body;
@@ -289,6 +698,14 @@ async function run() {
         res.status(500).send({ message: "An error occurred", error });
       }
     });
+
+    app.get("/forumDetails/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await blogsCollection.findOne(query);
+      res.send(result);
+    });
+
     app.put("/users/:id/roleMember", async (req, res) => {
       const userId = req.params.id;
       const { role } = req.body;
@@ -312,6 +729,22 @@ async function run() {
         res.status(500).send({ message: "An error occurred", error });
       }
     });
+
+    app.delete(
+      "/deleteSlot/:id",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        const email = req?.query?.email;
+        const id = req.params.id;
+        if (email !== req.decoded.email) {
+          return res.status(403).send({ message: "Forbidden Access" });
+        }
+        const query = { _id: new ObjectId(id) };
+        const result = await slotsCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
