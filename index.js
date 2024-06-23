@@ -397,11 +397,9 @@ async function run() {
     });
 
     app.get("/usersPending", async (req, res) => {
-      console.log("pending hit");
       try {
         const query = { status: "pending" };
         const pendingUsers = await usersCollection.find(query).toArray();
-        console.log("Pending users found:", pendingUsers);
         res.json(pendingUsers);
       } catch (error) {
         console.error("Error fetching pending users:", error);
@@ -483,11 +481,9 @@ async function run() {
     });
 
     app.get("/usersTrainer", async (req, res) => {
-      console.log("Trainer Hit");
       try {
         const query = { role: "trainer" };
         const trainers = await usersCollection.find(query).toArray();
-        console.log("Trainer found:", trainers);
         res.json(trainers);
       } catch (error) {
         console.error("Error fetching trainers:", error);
@@ -521,9 +517,7 @@ async function run() {
 
     app.put("/users/:email", async (req, res) => {
       const email = req.params.email;
-      console.log(email);
       const userData = req.body;
-      console.log(userData);
       const query = { email: email };
       const update = {
         $set: userData,
@@ -555,7 +549,6 @@ async function run() {
     });
 
     app.post("/testimonials", verifyToken, async (req, res) => {
-      console.log(req.body);
       const testimonialData = req.body;
       try {
         const result = await testimonialsCollection.insertOne(testimonialData);
