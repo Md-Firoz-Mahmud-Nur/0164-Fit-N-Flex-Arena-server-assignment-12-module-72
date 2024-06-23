@@ -321,13 +321,11 @@ async function run() {
       }
 
       const paymentData = req.body;
+      const name = paymentData.class.cName.value;
 
       if (!paymentData?.class?.cName) {
         return res.status(400).send({ message: "Class name is required" });
       }
-
-      const className = paymentData.class.cName;
-      const name = String(paymentData.class.cName); // Ensure name is a string
 
       const query = { name: { $regex: name, $options: "i" } };
       const query0 = { _id: new ObjectId(paymentData.class.sId) };
@@ -338,7 +336,7 @@ async function run() {
           bookedBy: {
             name: paymentData.user.name,
             email: paymentData.user.email,
-            class_name: className,
+            class_name: name,
           },
         },
       };
