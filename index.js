@@ -210,6 +210,7 @@ async function run() {
                     },
                   },
                   { $project: { photoUrl: 1, _id: 1, role: 1, status: 1 } },
+                  { $limit: 5 },
                 ],
                 as: "trainer",
               },
@@ -433,7 +434,7 @@ async function run() {
         .aggregate([
           {
             $sort: {
-              date: -1, // Sort by date field in descending order
+              date: -1,
             },
           },
           {
@@ -504,8 +505,15 @@ async function run() {
     app.get("/blogs", async (req, res) => {
       const result = await blogsCollection
         .find()
-        .project({ title: 1, author: 1, postDate: 1, image: 1, description: 1 })
-        .sort({ postDate: -1 })
+        .project({
+          title: 1,
+          author: 1,
+          postDate: 1,
+          image: 1,
+          description: 1,
+          role: 1,
+        })
+        .sort({ postDate1: -1 })
         .limit(6)
         .toArray();
       res.send(result);
@@ -544,6 +552,18 @@ async function run() {
     app.get("/testimonials", async (req, res) => {
       const result = await testimonialsCollection.find().toArray();
       res.send(result);
+    });
+
+    app.post("/testimonials", verifyToken, async (req, res) => {
+      console.log(req.body);
+      const testimonialData = req.body;
+      try {
+        const result = await testimonialsCollection.insertOne(testimonialData);
+        res.send(result);
+      } catch (error) {
+        console.error("Error saving testimonial:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
     });
 
     app.put("/users/:id/statusResolved", async (req, res) => {
