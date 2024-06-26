@@ -328,7 +328,7 @@ async function run() {
         return res.status(400).send({ message: "Class name is required" });
       }
 
-      const query = { name: { $regex: name, $options: "i" } };
+      const query = { name: name };
       const query0 = { _id: new ObjectId(paymentData.class.sId) };
 
       const updateSlot = {
