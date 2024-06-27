@@ -384,6 +384,21 @@ async function run() {
       res.send(user);
     });
 
+    app.put("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const userData = req.body;
+      const query = { email: email };
+      const update = {
+        $set: userData,
+      };
+      const result = await usersCollection.updateOne(query, update);
+      if (result.modifiedCount > 0) {
+        res.send({ message: "User updated successfully", result });
+      } else {
+        res.send({ message: "No changes made to the user", result });
+      }
+    });
+
     app.get("/activityLogs/:email", verifyToken, async (req, res) => {
       if (req?.query?.email !== req.decoded.email) {
         return res.status(403).send({ message: "Forbidden Access" });
@@ -513,25 +528,6 @@ async function run() {
         .limit(6)
         .toArray();
       res.send(result);
-    });
-
-    app.put("/users/:email", async (req, res) => {
-      const email = req.params.email;
-      const userData = req.body;
-      const query = { email: email };
-      const update = {
-        $set: userData,
-      };
-      const options = { upsert: true };
-
-      const result = await usersCollection.updateOne(query, update, options);
-      if (result.upsertedCount > 0) {
-        res.send({ message: "User created successfully", result });
-      } else if (result.modifiedCount > 0) {
-        res.send({ message: "User updated successfully", result });
-      } else {
-        res.send({ message: "No changes made to the user", result });
-      }
     });
 
     app.get("/featuredClass", async (req, res) => {
